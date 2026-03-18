@@ -1192,7 +1192,7 @@ function getFreeSlots(events, date) {
 
   for (const b of merged) {
     if (b.s > cur) {
-      // Apply 30min buffer before this event
+      // 30-min buffer before event: slot must end 30 min before event starts
       const slotEnd = Math.min(b.s - 30, DAY_END);
       if (slotEnd - cur >= 20) {
         const leftBuffer = prevEventEnd !== null ? cur - prevEventEnd : Infinity;
@@ -1200,10 +1200,11 @@ function getFreeSlots(events, date) {
       }
     }
     prevEventEnd = b.e;
-    cur = Math.max(cur, b.e);
+    // 15-min buffer after event: next slot starts 15 min after event ends
+    cur = Math.max(cur, b.e + 15);
   }
 
-  // Gap after last event (no next-event buffer needed)
+  // Gap after last event (no next-event buffer needed here)
   if (DAY_END - cur >= 20) {
     const leftBuffer = prevEventEnd !== null ? cur - prevEventEnd : Infinity;
     slots.push({ s: cur, e: DAY_END, dur: DAY_END - cur, leftBuffer });
@@ -1249,21 +1250,45 @@ function scoreSlots(slots, wx, prefs) {
 }
 
 function computeRec(date, events, wx) {
-  const slots = getFreeSlots(events, date);
-  const prefs = JSON.parse(localStorage.getItem('less_onboarding') || '{}');
+  const allSlots = getFreeSlots(events, date);
+  const prefs    = JSON.parse(localStorage.getItem('less_onboarding') || '{}');
 
-  if (!slots.length) {
-    return { slot: null, phrase: buildPhrase(date, null, 0, wx, 'no_slots'), type: 'Rest day' };
+  if (!allSlots.length) {
+    return { slot: null, phrase: buildPhrase(date, null, 0, wx, 'no_slots', null), type: 'Rest day' };
   }
 
-  const scored  = scoreSlots(slots, wx, prefs);
-  const best    = scored[0];
+  // Hard time-window filter — user preference is a first-class constraint, not just a score bonus
+  const tMap = {
+    Morning:   [6 * 60,  12 * 60],  // 6am – 12pm
+    Afternoon: [12 * 60, 18 * 60],  // 12pm – 6pm
+    Evening:   [18 * 60, 21 * 60],  // 6pm – 9pm
+  };
+  const prefWindow     = prefs.time && tMap[prefs.time] ? tMap[prefs.time] : null;
+  const fallbackPref   = prefs.time && prefWindow ? prefs.time : null;
+
+  // Clip each slot to the preferred window; drop anything under 20 min after clipping
+  const clipToWindow = (slots, window) =>
+    slots.map(s => {
+      const cs = Math.max(s.s, window[0]);
+      const ce = Math.min(s.e, window[1]);
+      return ce - cs >= 20 ? { ...s, s: cs, e: ce, dur: ce - cs } : null;
+    }).filter(Boolean);
+
+  const prefSlots = prefWindow ? clipToWindow(allSlots, prefWindow) : allSlots;
+
+  let usedSlots       = prefSlots.length ? prefSlots : allSlots;
+  let fellBack        = prefSlots.length === 0 && prefWindow !== null;
+
+  const scored   = scoreSlots(usedSlots, wx, prefs);
+  const best     = scored[0];
   const hasIdeal = scored.some(s => s.isIdeal);
-  const quality  = hasIdeal && best.isIdeal ? 'ideal' : 'best_available';
+  const quality  = fellBack
+    ? 'fallback'
+    : (hasIdeal && best.isIdeal ? 'ideal' : 'best_available');
 
   return {
     slot: best,
-    phrase: buildPhrase(date, best, slots.length, wx, quality),
+    phrase: buildPhrase(date, best, usedSlots.length, wx, quality, fellBack ? fallbackPref : null),
     type: getWorkoutType(prefs, wx),
     scored,
     events,
@@ -1282,7 +1307,7 @@ function getWorkoutType(prefs, wx) {
   return 'Your choice';
 }
 
-function buildPhrase(date, slot, totalSlots, wx, quality) {
+function buildPhrase(date, slot, totalSlots, wx, quality, fallbackPrefName) {
   const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const today = new Date();
   const tom   = new Date(); tom.setDate(today.getDate() + 1);
@@ -1302,7 +1327,13 @@ function buildPhrase(date, slot, totalSlots, wx, quality) {
   const time   = toLabel(slot.s);
   const durStr = slot.dur >= 45 ? '45 minutes' : slot.dur >= 30 ? '30 minutes' : '20 minutes';
 
-  // Imperfect slot messages
+  // Fell back from preferred time window — explain clearly
+  if (quality === 'fallback' && fallbackPrefName) {
+    const pref = fallbackPrefName.toLowerCase();
+    return `Nothing open in the ${pref} ${isToday ? 'today' : 'on ' + DAYS[date.getDay()]} — best I found is ${time}. Still want it?`;
+  }
+
+  // Imperfect slot messages (within preferred window but not ideal duration)
   if (quality === 'best_available') {
     if (slot.dur < 25) {
       return `${ref}'s packed end to end. Best I can do is ${durStr} at ${time} — take it or skip it.`;
