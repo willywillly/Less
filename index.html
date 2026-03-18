@@ -250,11 +250,11 @@ html, body {
 .google-btn:hover    { opacity: 0.85; }
 .google-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* ── WEEK GRID ── */
+/* ── WEEK VIEW (GOOGLE CALENDAR STYLE) ── */
 .week-card {
   background: var(--card);
   border-radius: 20px;
-  padding: 16px 12px;
+  overflow: hidden;
   box-shadow: 0 1px 4px rgba(0,0,0,0.05);
 }
 .week-range-label {
@@ -262,38 +262,31 @@ html, body {
   font-weight: 600;
   color: var(--muted);
   letter-spacing: 0.03em;
-  margin-bottom: 12px;
-  padding: 0 4px;
+  padding: 12px 12px 0;
 }
+.week-grid { /* gcal container */ }
 
-.week-grid {
+.gcal-header {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
+  grid-template-columns: 40px repeat(7, 1fr);
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
 }
-
-.day-col {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 3px 10px;
-  border-radius: 14px;
+.gcal-day-head {
+  text-align: center;
+  padding: 8px 2px 6px;
   cursor: pointer;
   transition: background 0.15s;
 }
-.day-col:hover    { background: #f7f3ee; }
-.day-col.today    { background: #f3fcd8; }
-.day-col.selected { background: #e8f7b0; }
-
-.day-name {
+.gcal-day-head:hover { background: #f7f3ee; }
+.gcal-day-name {
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
 }
-.day-num {
+.gcal-day-num {
   font-size: 15px;
   font-weight: 600;
   width: 28px;
@@ -302,21 +295,84 @@ html, body {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
+  margin: 3px auto 0;
 }
-.day-col.today .day-num { background: var(--accent); font-weight: 700; }
+.gcal-day-head.today    .gcal-day-num { background: var(--accent); font-weight: 700; }
+.gcal-day-head.selected .gcal-day-num { background: #e8f7b0; }
 
-.day-pips {
+.gcal-body {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-height: 32px;
-  width: 100%;
+  overflow-y: auto;
+  max-height: 400px;
 }
-.pip { width: 80%; height: 3px; border-radius: 2px; background: #D8D0C8; }
-.pip.workout { background: var(--accent); height: 5px; border-radius: 3px; }
-
-.day-wx { font-size: 13px; line-height: 1; }
+.gcal-time-axis { width: 40px; flex-shrink: 0; }
+.gcal-time-label {
+  height: 40px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding-right: 5px;
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: -5px;
+}
+.gcal-cols {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  position: relative;
+}
+.gcal-col {
+  position: relative;
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+}
+.gcal-col:hover    { background: rgba(0,0,0,0.01); }
+.gcal-col.today    { background: rgba(200,241,53,0.04); }
+.gcal-col.selected { background: rgba(200,241,53,0.1); }
+.gcal-hour-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 1px;
+  background: var(--border);
+  pointer-events: none;
+}
+.gcal-event {
+  position: absolute;
+  left: 1px; right: 1px;
+  border-radius: 4px;
+  padding: 2px 3px;
+  overflow: hidden;
+  z-index: 2;
+  min-height: 10px;
+}
+.gcal-event.work    { background: #E0E0E0; }
+.gcal-event.life    { background: #FFFFFF; border: 1px solid #D0C8C0; }
+.gcal-event.workout { background: var(--accent); z-index: 3; }
+.gcal-event-title {
+  font-size: 8px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+.gcal-now-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: #E05050;
+  z-index: 5;
+  pointer-events: none;
+}
+.gcal-now-dot {
+  position: absolute;
+  left: -3px; top: -3px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #E05050;
+}
 
 /* ── DAY DETAIL ── */
 .day-detail {
@@ -521,6 +577,14 @@ html, body {
 }
 .city-input:focus { border-color: var(--accent); }
 
+.loc-status {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; background: #f3fcd8;
+  border-radius: 12px; margin-top: 8px;
+  font-size: 13px; font-weight: 500;
+}
+.loc-dot { width: 6px; height: 6px; border-radius: 50%; background: #4CAF50; flex-shrink: 0; }
+
 .signout-btn {
   width: 100%; padding: 16px;
   background: none; border: 1.5px solid var(--border);
@@ -634,7 +698,7 @@ html, body {
       <div id="week-content" style="display:none">
         <div class="week-card">
           <div class="week-range-label" id="week-range"></div>
-          <div class="week-grid" id="week-grid"></div>
+          <div id="week-grid"></div>
         </div>
         <div id="day-detail-slot"></div>
       </div>
@@ -662,7 +726,8 @@ html, body {
       <div class="card">
         <div class="section-label">Location</div>
         <p style="font-size:12px;color:var(--muted)">Used for live weather data</p>
-        <input class="city-input" id="city-input" type="text" placeholder="City, State"/>
+        <div id="loc-status-area"></div>
+        <input class="city-input" id="city-input" type="text" placeholder="City, State" style="display:none"/>
       </div>
       <button class="signout-btn" onclick="signOut()">Sign out</button>
     </div>
@@ -699,6 +764,7 @@ let weekEvents   = {};
 let weekForecast = {};
 let weekRecs     = {};
 let selectedDayKey = null;
+let currentCoords  = null;
 
 // ─────────────────────────────────────────────
 // ONBOARDING
@@ -794,6 +860,64 @@ function clearSession() {
 }
 
 // ─────────────────────────────────────────────
+// LOCATION DETECTION
+// ─────────────────────────────────────────────
+function initLocation() {
+  const stored = localStorage.getItem('less_coords');
+  if (stored) {
+    try {
+      currentCoords = JSON.parse(stored);
+      renderLocationUI(true);
+      return;
+    } catch { /* fall through */ }
+  }
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        currentCoords = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        localStorage.setItem('less_coords', JSON.stringify(currentCoords));
+        renderLocationUI(true);
+      },
+      () => {
+        // Permission denied — show city input fallback
+        renderLocationUI(false);
+      },
+      { timeout: 8000 }
+    );
+  } else {
+    renderLocationUI(false);
+  }
+}
+
+function renderLocationUI(hasCoords) {
+  const statusArea = document.getElementById('loc-status-area');
+  const cityInput  = document.getElementById('city-input');
+  if (!statusArea || !cityInput) return;
+
+  if (hasCoords) {
+    statusArea.innerHTML = `<div class="loc-status"><div class="loc-dot"></div>Using your location</div>`;
+    cityInput.style.display = 'none';
+    // Add a small "use city instead" link
+    statusArea.innerHTML += `<p style="font-size:11px;color:var(--muted);margin-top:6px;cursor:pointer" onclick="switchToCity()">Use city name instead</p>`;
+  } else {
+    statusArea.innerHTML = '';
+    cityInput.style.display = 'block';
+    cityInput.value = localStorage.getItem('less_city') || '';
+    cityInput.addEventListener('change', () => {
+      localStorage.setItem('less_city', cityInput.value);
+      localStorage.removeItem('less_coords');
+      currentCoords = null;
+    });
+  }
+}
+
+function switchToCity() {
+  localStorage.removeItem('less_coords');
+  currentCoords = null;
+  renderLocationUI(false);
+}
+
+// ─────────────────────────────────────────────
 // BOOT
 // ─────────────────────────────────────────────
 function init() {
@@ -811,6 +935,7 @@ function bootMainApp() {
 
   updateGreeting();
   renderProfile();
+  initLocation();
 
   const session = loadSession();
   if (session && session.token) {
@@ -821,7 +946,6 @@ function bootMainApp() {
     showSignedIn();
     loadWeekData();
   } else if (session && session.user) {
-    // Token expired — have user info for hint; try silent refresh
     userInfo = session.user;
     updateUserUI();
     document.getElementById('week-loading').style.display = 'flex';
@@ -935,9 +1059,16 @@ async function loadWeekData() {
       });
     }
 
-    const city = localStorage.getItem('less_city') || document.getElementById('city-input')?.value || 'New Brunswick,NJ';
+    // Weather: prefer geolocation coords, fall back to city
     try {
-      const wxRes = await fetch(`https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${OW_KEY}&units=imperial`);
+      let wxUrl;
+      if (currentCoords) {
+        wxUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${currentCoords.lat}&lon=${currentCoords.lon}&appid=${OW_KEY}&units=imperial`;
+      } else {
+        const city = localStorage.getItem('less_city') || document.getElementById('city-input')?.value || 'New York,NY';
+        wxUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${encodeURIComponent(city)}&appid=${OW_KEY}&units=imperial`;
+      }
+      const wxRes = await fetch(wxUrl);
       if (wxRes.ok) buildWeekForecast(days, await wxRes.json());
     } catch(e) { /* weather optional */ }
 
@@ -1027,7 +1158,7 @@ const WX_EMOJI = { Clear:'☀️', Clouds:'☁️', Rain:'🌧', Drizzle:'🌦',
 const wxEmoji = main => WX_EMOJI[main] || '🌤';
 
 // ─────────────────────────────────────────────
-// FREE SLOTS
+// FREE SLOTS (smarter: 30min buffer, 9pm cutoff)
 // ─────────────────────────────────────────────
 function toMin(iso) { const d = new Date(iso); return d.getHours() * 60 + d.getMinutes(); }
 
@@ -1039,12 +1170,15 @@ function toLabel(m) {
 function getFreeSlots(events, date) {
   const isToday = date.toDateString() === new Date().toDateString();
   const nowMin  = isToday ? new Date().getHours() * 60 + new Date().getMinutes() : 0;
+  const DAY_START = 6 * 60;   // 6am
+  const DAY_END   = 21 * 60;  // 9pm hard cutoff — never suggest after this
 
   const busy = events
     .filter(ev => ev.start.dateTime)
     .map(ev => ({ s: toMin(ev.start.dateTime), e: toMin(ev.end.dateTime) }))
     .sort((a, b) => a.s - b.s);
 
+  // Merge overlapping blocks
   const merged = [];
   for (const b of busy) {
     if (merged.length && b.s <= merged[merged.length - 1].e)
@@ -1052,49 +1186,90 @@ function getFreeSlots(events, date) {
     else merged.push({ ...b });
   }
 
-  let cur = Math.max(360, isToday ? nowMin : 360);
+  let cur = Math.max(DAY_START, isToday ? nowMin : DAY_START);
+  let prevEventEnd = null;
   const slots = [];
+
   for (const b of merged) {
-    if (b.s > cur && b.s - cur >= 20) slots.push({ s: cur, e: b.s, dur: b.s - cur });
+    if (b.s > cur) {
+      // Apply 30min buffer before this event
+      const slotEnd = Math.min(b.s - 30, DAY_END);
+      if (slotEnd - cur >= 20) {
+        const leftBuffer = prevEventEnd !== null ? cur - prevEventEnd : Infinity;
+        slots.push({ s: cur, e: slotEnd, dur: slotEnd - cur, leftBuffer });
+      }
+    }
+    prevEventEnd = b.e;
     cur = Math.max(cur, b.e);
   }
-  if (1320 - cur >= 20) slots.push({ s: cur, e: 1320, dur: 1320 - cur });
+
+  // Gap after last event (no next-event buffer needed)
+  if (DAY_END - cur >= 20) {
+    const leftBuffer = prevEventEnd !== null ? cur - prevEventEnd : Infinity;
+    slots.push({ s: cur, e: DAY_END, dur: DAY_END - cur, leftBuffer });
+  }
+
   return slots;
 }
 
 // ─────────────────────────────────────────────
-// RECOMMENDATION ENGINE
+// RECOMMENDATION ENGINE (smarter scoring)
 // ─────────────────────────────────────────────
-function scoreSlots(slots, wx) {
+function scoreSlots(slots, wx, prefs) {
   const rain = wx && ['Rain','Drizzle','Thunderstorm','Snow'].includes(wx.main);
   const nice = wx && !rain && wx.temp > 40 && wx.temp < 90;
+
+  const tMap = { Morning: [6*60, 12*60], Afternoon: [12*60, 17*60], Evening: [17*60, 21*60] };
+  const prefRange = prefs?.time && tMap[prefs.time] ? tMap[prefs.time] : null;
+
   return slots.map(sl => {
     let score = 0;
-    if (sl.dur >= 45) score += 2; else if (sl.dur >= 30) score += 1;
-    if (nice) score += 1;
-    if (rain) score -= 1;
-    const mid = (sl.s + sl.e) / 2;
-    if (mid >= 360 && mid <= 720) score += 0.5;
-    return { ...sl, score, rain, nice };
-  }).sort((a, b) => b.score - a.score || b.dur - a.dur);
+    let isIdeal = false;
+
+    // Prefer mid-length blocks (45–90 min) — sweet spot
+    if (sl.dur >= 45 && sl.dur <= 90) { score += 3; isIdeal = true; }
+    else if (sl.dur >= 30 && sl.dur < 45) score += 1;
+    else if (sl.dur > 90) score += 1;   // long is fine but not the hero pick
+
+    // Time-of-day preference
+    if (prefRange) {
+      const mid = (sl.s + sl.e) / 2;
+      if (mid >= prefRange[0] && mid < prefRange[1]) { score += 2; }
+    }
+
+    // Left-side buffer bonus (≥15 min gap after previous event)
+    if (sl.leftBuffer >= 15) score += 0.5;
+
+    // Weather
+    if (nice) score += 0.5;
+    if (rain) score -= 0.5;
+
+    return { ...sl, score, rain, nice, isIdeal };
+  }).sort((a, b) => b.score - a.score || (b.dur <= 90 ? b.dur : 90) - (a.dur <= 90 ? a.dur : 90));
 }
 
 function computeRec(date, events, wx) {
   const slots = getFreeSlots(events, date);
   const prefs = JSON.parse(localStorage.getItem('less_onboarding') || '{}');
-  if (!slots.length) return { slot: null, phrase: buildPhrase(date, null, 0, wx), type: 'Rest day' };
 
-  const scored = scoreSlots(slots, wx);
-  let best = scored[0];
-
-  const tMap = { Morning: [360, 720], Afternoon: [720, 1020], Evening: [1020, 1320] };
-  if (prefs.time && tMap[prefs.time]) {
-    const [lo, hi] = tMap[prefs.time];
-    const pref = scored.find(s => s.s >= lo && s.s < hi);
-    if (pref && pref.score >= best.score - 1) best = pref;
+  if (!slots.length) {
+    return { slot: null, phrase: buildPhrase(date, null, 0, wx, 'no_slots'), type: 'Rest day' };
   }
 
-  return { slot: best, phrase: buildPhrase(date, best, slots.length, wx), type: getWorkoutType(prefs, wx), scored, events, wx };
+  const scored  = scoreSlots(slots, wx, prefs);
+  const best    = scored[0];
+  const hasIdeal = scored.some(s => s.isIdeal);
+  const quality  = hasIdeal && best.isIdeal ? 'ideal' : 'best_available';
+
+  return {
+    slot: best,
+    phrase: buildPhrase(date, best, slots.length, wx, quality),
+    type: getWorkoutType(prefs, wx),
+    scored,
+    events,
+    wx,
+    hasIdeal,
+  };
 }
 
 function getWorkoutType(prefs, wx) {
@@ -1107,7 +1282,7 @@ function getWorkoutType(prefs, wx) {
   return 'Your choice';
 }
 
-function buildPhrase(date, slot, totalSlots, wx) {
+function buildPhrase(date, slot, totalSlots, wx, quality) {
   const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
   const today = new Date();
   const tom   = new Date(); tom.setDate(today.getDate() + 1);
@@ -1120,25 +1295,36 @@ function buildPhrase(date, slot, totalSlots, wx) {
   const cold = wx && wx.temp < 36;
 
   if (!slot) {
-    if (isToday) return "Today's packed. Rest up — you can always sneak in 10 minutes.";
+    if (isToday) return "Today's packed end to end. Rest up — or sneak in 10 minutes whenever.";
     return `${ref} looks tight. A rest day is still a good day.`;
   }
 
   const time   = toLabel(slot.s);
   const durStr = slot.dur >= 45 ? '45 minutes' : slot.dur >= 30 ? '30 minutes' : '20 minutes';
 
+  // Imperfect slot messages
+  if (quality === 'best_available') {
+    if (slot.dur < 25) {
+      return `${ref}'s packed end to end. Best I can do is ${durStr} at ${time} — take it or skip it.`;
+    }
+    if (totalSlots === 1) {
+      return `One tight window ${isToday ? 'today' : 'on ' + DAYS[date.getDay()]} — ${time}. Not ideal, but it's there.`;
+    }
+    return `Nothing perfect ${isToday ? 'today' : 'on ' + DAYS[date.getDay()]}. ${time} is your best shot — ${durStr}.`;
+  }
+
   if (totalSlots === 1) {
     if (rain) return `${ref} has one window — ${time}. Weather's rough, keep it inside.`;
     return `One open slot ${isToday ? 'today' : 'on ' + DAYS[date.getDay()]} — ${time}. Make it count.`;
   }
 
-  if (slot.s < 720) {
+  if (slot.s < 12 * 60) {
     if (rain)  return `Morning window at ${time}. Take it inside — ${durStr}.`;
     if (cold)  return `${time} works. It's cold out, layer up or stay in.`;
     return `${ref} morning looks open at ${time}. ${durStr}, go move.`;
   }
 
-  if (slot.s >= 1020) {
+  if (slot.s >= 17 * 60) {
     if (rain) return `${time} ${isToday ? 'tonight' : 'on ' + DAYS[date.getDay()]} — indoor workout, ${durStr}.`;
     return `${ref} at ${time} looks clean. Good time to decompress.`;
   }
@@ -1150,30 +1336,105 @@ function buildPhrase(date, slot, totalSlots, wx) {
 }
 
 // ─────────────────────────────────────────────
-// WEEK GRID
+// WEEK GRID (Google Calendar style)
 // ─────────────────────────────────────────────
 function renderWeekGrid(days) {
-  const DAY_NAMES = ['Mo','Tu','We','Th','Fr','Sa','Su'];
-  const todayStr  = new Date().toDateString();
+  const DAY_NAMES  = ['Mo','Tu','We','Th','Fr','Sa','Su'];
+  const todayStr   = new Date().toDateString();
+  const HOUR_H     = 40;      // px per hour
+  const GRID_START = 6;       // 6am
+  const GRID_END   = 22;      // 10pm
+  const TOTAL_H    = (GRID_END - GRID_START) * HOUR_H;
 
-  document.getElementById('week-grid').innerHTML = days.map((day, i) => {
+  // Header
+  const headerCells = days.map((day, i) => {
+    const key     = dayKey(day);
+    const isToday = day.toDateString() === todayStr;
+    const isSel   = selectedDayKey === key;
+    return `<div class="gcal-day-head${isToday ? ' today' : ''}${isSel ? ' selected' : ''}" onclick="toggleDay('${key}')">
+      <div class="gcal-day-name">${DAY_NAMES[i]}</div>
+      <div class="gcal-day-num">${day.getDate()}</div>
+    </div>`;
+  }).join('');
+
+  // Time axis labels
+  let timeLabels = '';
+  for (let h = GRID_START; h <= GRID_END; h++) {
+    const label = h === 12 ? '12P' : h > 12 ? `${h - 12}P` : `${h}A`;
+    timeLabels += `<div class="gcal-time-label">${h === GRID_START ? '' : label}</div>`;
+  }
+
+  // Day columns
+  const cols = days.map(day => {
     const key     = dayKey(day);
     const isToday = day.toDateString() === todayStr;
     const isSel   = selectedDayKey === key;
     const events  = weekEvents[key] || [];
     const rec     = weekRecs[key];
     const wx      = weekForecast[key];
-    const evCount = Math.min(events.filter(e => e.start.dateTime).length, 4);
-    const pips    = Array(evCount).fill('<div class="pip"></div>').join('');
-    const wPip    = rec?.slot ? '<div class="pip workout"></div>' : '';
 
-    return `<div class="day-col${isToday?' today':''}${isSel?' selected':''}" onclick="toggleDay('${key}')">
-      <div class="day-name">${DAY_NAMES[i]}</div>
-      <div class="day-num">${day.getDate()}</div>
-      <div class="day-pips">${pips}${wPip}</div>
-      <div class="day-wx">${wx ? wxEmoji(wx.main) : ''}</div>
+    // Hour grid lines
+    let hourLines = '';
+    for (let h = 0; h < GRID_END - GRID_START; h++) {
+      hourLines += `<div class="gcal-hour-line" style="top:${h * HOUR_H}px"></div>`;
+    }
+
+    // Calendar event blocks
+    let eventBlocks = '';
+    events.filter(ev => ev.start.dateTime).forEach(ev => {
+      const s   = toMin(ev.start.dateTime);
+      const e2  = toMin(ev.end.dateTime);
+      const top = (s - GRID_START * 60) / 60 * HOUR_H;
+      const h   = Math.max((e2 - s) / 60 * HOUR_H, 10);
+      if (top < 0 || top > TOTAL_H) return;
+      const title     = (ev.summary || '').replace('💪 ', '');
+      const isWorkout = (ev.summary || '').startsWith('💪');
+      const cls       = isWorkout ? 'workout' : 'work';
+      eventBlocks += `<div class="gcal-event ${cls}" style="top:${top.toFixed(0)}px;height:${h.toFixed(0)}px" onclick="event.stopPropagation();toggleDay('${key}')">
+        <div class="gcal-event-title">${title}</div>
+      </div>`;
+    });
+
+    // Workout recommendation block
+    if (rec?.slot) {
+      const s   = rec.slot.s;
+      const dur = Math.min(rec.slot.dur, 60);
+      const e2  = s + dur;
+      const top = (s - GRID_START * 60) / 60 * HOUR_H;
+      const h   = Math.max(dur / 60 * HOUR_H, 14);
+      if (top >= 0 && top <= TOTAL_H) {
+        const wxLabel = wx ? wxEmoji(wx.main) : '';
+        eventBlocks += `<div class="gcal-event workout" style="top:${top.toFixed(0)}px;height:${h.toFixed(0)}px" onclick="event.stopPropagation();toggleDay('${key}')">
+          <div class="gcal-event-title">${wxLabel} workout</div>
+        </div>`;
+      }
+    }
+
+    // Current time line (today only)
+    let nowLine = '';
+    if (isToday) {
+      const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+      const top    = (nowMin - GRID_START * 60) / 60 * HOUR_H;
+      if (top >= 0 && top <= TOTAL_H) {
+        nowLine = `<div class="gcal-now-line" style="top:${top.toFixed(0)}px"><div class="gcal-now-dot"></div></div>`;
+      }
+    }
+
+    return `<div class="gcal-col${isToday ? ' today' : ''}${isSel ? ' selected' : ''}"
+         style="height:${TOTAL_H}px" onclick="toggleDay('${key}')">
+      ${hourLines}${eventBlocks}${nowLine}
     </div>`;
   }).join('');
+
+  document.getElementById('week-grid').innerHTML = `
+    <div class="gcal-header">
+      <div></div>
+      ${headerCells}
+    </div>
+    <div class="gcal-body">
+      <div class="gcal-time-axis">${timeLabels}</div>
+      <div class="gcal-cols">${cols}</div>
+    </div>`;
 }
 
 // ─────────────────────────────────────────────
@@ -1427,12 +1688,6 @@ function renderProfile() {
           <span class="pref-val">${val}</span>
         </div>`).join('');
     }
-  }
-
-  const cityInput = document.getElementById('city-input');
-  if (cityInput) {
-    cityInput.value = localStorage.getItem('less_city') || 'New Brunswick, NJ';
-    cityInput.addEventListener('change', () => localStorage.setItem('less_city', cityInput.value));
   }
 }
 
