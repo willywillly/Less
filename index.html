@@ -644,6 +644,78 @@ html, body {
   border-radius: 16px; padding: 16px;
   font-size: 13px; color: #C0392B; line-height: 1.55;
 }
+
+/* ── LESS CHAT ── */
+.less-chat-wrap {
+  margin-top: 4px;
+}
+
+.less-messages {
+  display: flex; flex-direction: column; gap: 8px;
+  max-height: 220px; overflow-y: auto;
+  padding: 12px 16px 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.less-msg {
+  max-width: 90%; font-size: 13px; line-height: 1.5;
+  padding: 9px 13px; border-radius: 16px;
+  word-break: break-word;
+}
+.less-msg.ai {
+  background: var(--bg); color: var(--text);
+  align-self: flex-start; border-bottom-left-radius: 4px;
+}
+.less-msg.user {
+  background: var(--text); color: var(--bg);
+  align-self: flex-end; border-bottom-right-radius: 4px;
+}
+
+.less-thinking {
+  font-size: 12px; color: var(--muted);
+  align-self: flex-start; padding: 6px 0 0 2px;
+  display: flex; align-items: center; gap: 5px;
+}
+.less-thinking-dots {
+  display: flex; gap: 3px;
+}
+.less-thinking-dots span {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--muted);
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+.less-thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.less-thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pulse-dot {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40%           { opacity: 1;   transform: scale(1);   }
+}
+
+.less-input-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+.less-input {
+  flex: 1; padding: 9px 14px;
+  background: var(--bg); border: 1.5px solid var(--border);
+  border-radius: 20px; font-family: inherit; font-size: 13px;
+  color: var(--text); outline: none;
+  transition: border-color 0.2s;
+}
+.less-input:focus { border-color: var(--accent); }
+.less-input::placeholder { color: var(--muted); }
+
+.less-send-btn {
+  width: 36px; height: 36px; flex-shrink: 0;
+  background: var(--accent); border: none; border-radius: 50%;
+  font-size: 16px; cursor: pointer; display: flex;
+  align-items: center; justify-content: center;
+  transition: transform 0.1s, opacity 0.1s;
+}
+.less-send-btn:active { transform: scale(0.92); }
+.less-send-btn:disabled { opacity: 0.4; cursor: default; }
 </style>
 </head>
 <body>
@@ -765,6 +837,21 @@ let weekForecast = {};
 let weekRecs     = {};
 let selectedDayKey = null;
 let currentCoords  = null;
+
+// ── LESS AI ──
+const LESS_SYSTEM = `You are Less — a calm, encouraging workout scheduler living inside a mobile app. Your personality:
+- Speak like a wise, supportive friend who genuinely understands how busy life is
+- NEVER guilt-trip, shame, or use words like "should", "must", or "fail"
+- Be concise: max 3 sentences per response unless the user asks for detail
+- Use the user's name and their preferences when you know them
+- When the user asks about today's workout: reference their actual schedule data and suggest the specific time window already computed
+- For general questions: give practical, kind advice grounded in their stated preferences
+- Always end with something actionable or uplifting, never a vague platitude`;
+
+// chat state per day key
+const chatHistory = {};  // key -> [{role, content}]
+let chatContext   = {};  // key -> context string
+let aiPending     = {};  // key -> bool (debounce)
 
 // ─────────────────────────────────────────────
 // ONBOARDING
@@ -1097,6 +1184,209 @@ async function loadWeekData() {
     err.textContent = e.message;
     document.getElementById('view-week').appendChild(err);
   }
+}
+
+// ─────────────────────────────────────────────
+// LESS AI
+// ─────────────────────────────────────────────
+function buildAIContext(key) {
+  const prefs   = JSON.parse(localStorage.getItem('less_onboarding') || '{}');
+  const events  = weekEvents[key]  || [];
+  const rec     = weekRecs[key];
+  const wx      = weekForecast[key];
+  const name    = prefs.name ? `User's name: ${prefs.name}.` : '';
+  const prefStr = [
+    prefs.frequency && `Frequency: ${prefs.frequency}`,
+    prefs.duration  && `Preferred session: ${prefs.duration}`,
+    prefs.time      && `Preferred time: ${prefs.time}`,
+    prefs.barrier   && `Main barrier: ${prefs.barrier}`,
+    prefs.movement  && `Movement type: ${prefs.movement}`,
+  ].filter(Boolean).join('; ');
+
+  const dateObj = new Date(key);
+  dateObj.setHours(12, 0, 0, 0);
+  const isToday = dateObj.toDateString() === new Date().toDateString();
+  const dateLabel = isToday
+    ? 'Today'
+    : dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+
+  const evList = events
+    .filter(e => e.start.dateTime)
+    .map(e => {
+      const s = toMin(e.start.dateTime), en = toMin(e.end.dateTime);
+      return `  - ${e.summary||'Event'}: ${toLabel(s)}–${toLabel(en)}`;
+    }).join('\n') || '  (none)';
+
+  let slotStr = 'No open windows.';
+  if (rec?.slot) {
+    slotStr = `Best window: ${toLabel(rec.slot.s)} (${rec.slot.dur} min available)`;
+    if (rec.type) slotStr += `, suggested type: ${rec.type}`;
+  }
+
+  const wxStr = wx ? `Weather: ${wx.temp}°F, ${wx.desc}` : '';
+
+  return [
+    `Date: ${dateLabel}.`,
+    name,
+    prefStr ? `User preferences: ${prefStr}.` : '',
+    `Schedule:\n${evList}`,
+    slotStr,
+    wxStr,
+  ].filter(Boolean).join('\n');
+}
+
+async function callLessAPI(messages) {
+  const res = await fetch('/api/claude', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ system: LESS_SYSTEM, messages }),
+  });
+  if (!res.ok) throw new Error(`API error ${res.status}`);
+  const data = await res.json();
+  return data?.content?.[0]?.text || '';
+}
+
+function initLessChat(key, containerEl) {
+  if (!chatHistory[key]) {
+    chatHistory[key] = [];
+    chatContext[key] = buildAIContext(key);
+  }
+
+  // Inject chat UI into the less-card in containerEl
+  const lessCard = containerEl.querySelector('.less-card');
+  if (!lessCard) return;
+
+  // Don't double-init
+  if (lessCard.querySelector('.less-chat-wrap')) return;
+
+  // Add chat wrap below the less-text
+  const chatWrap = document.createElement('div');
+  chatWrap.className = 'less-chat-wrap';
+  chatWrap.id = `chat-wrap-${key}`;
+  chatWrap.innerHTML = `
+    <div class="less-messages" id="chat-msgs-${key}"></div>
+    <div class="less-input-row">
+      <input class="less-input" id="chat-input-${key}" type="text"
+        placeholder="ask Less anything…"
+        onkeydown="if(event.key==='Enter')sendLessChat('${key}')"/>
+      <button class="less-send-btn" id="chat-send-${key}" onclick="sendLessChat('${key}')">↑</button>
+    </div>`;
+  lessCard.appendChild(chatWrap);
+
+  // Restore prior history (if revisiting the card)
+  const msgsEl = document.getElementById(`chat-msgs-${key}`);
+  chatHistory[key].forEach(m => addChatMsg(msgsEl, m.content, m.role));
+
+  // Auto-fetch the opening Less recommendation if no history yet
+  if (chatHistory[key].length === 0) {
+    autoLessRec(key);
+  }
+}
+
+async function autoLessRec(key) {
+  if (aiPending[key]) return;
+  aiPending[key] = true;
+
+  const msgsEl = document.getElementById(`chat-msgs-${key}`);
+  if (!msgsEl) { aiPending[key] = false; return; }
+
+  // Show thinking indicator
+  const thinkingId = `thinking-${key}`;
+  msgsEl.insertAdjacentHTML('beforeend', `
+    <div class="less-thinking" id="${thinkingId}">
+      <div class="less-thinking-dots"><span></span><span></span><span></span></div>
+    </div>`);
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+
+  // Seed the conversation with context
+  const contextMsg = { role: 'user', content: `Context:\n${chatContext[key]}\n\nGive me a brief, encouraging workout recommendation for this day. Be specific about the time window.` };
+
+  try {
+    const text = await callLessAPI([contextMsg]);
+    document.getElementById(thinkingId)?.remove();
+
+    // Display AI msg and store in history (but don't store the hidden context seed)
+    addChatMsg(msgsEl, text, 'ai');
+    chatHistory[key].push({ role: 'ai', content: text });
+
+    // Update the less-text in the card too
+    const lessCard = document.getElementById(`chat-wrap-${key}`)?.closest('.less-card');
+    const lt = lessCard?.querySelector('.less-text');
+    if (lt) lt.textContent = text.split('.')[0] + '.';
+  } catch {
+    document.getElementById(thinkingId)?.remove();
+    // Silently fall back — keep the rules-based phrase already showing
+  }
+  aiPending[key] = false;
+}
+
+async function sendLessChat(key) {
+  const input  = document.getElementById(`chat-input-${key}`);
+  const sendBtn = document.getElementById(`chat-send-${key}`);
+  if (!input) return;
+
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  sendBtn.disabled = true;
+  aiPending[key] = true;
+
+  const msgsEl = document.getElementById(`chat-msgs-${key}`);
+  addChatMsg(msgsEl, text, 'user');
+  chatHistory[key].push({ role: 'user', content: text });
+
+  // Build the full message array for Claude
+  // First message injects context so Claude knows the schedule
+  const apiMessages = [
+    { role: 'user', content: `Context:\n${chatContext[key]}\n\n${chatHistory[key][0]?.role === 'ai' ? 'Previous recommendation: ' + (chatHistory[key][0]?.content || '') + '\n\n' : ''}User asks: ${text}` },
+  ];
+
+  // If we have a prior AI reply, include back-and-forth from message 1 onward
+  if (chatHistory[key].length > 2) {
+    const turns = chatHistory[key].slice(1); // skip the first AI rec which is already in context seed
+    const apiTurns = [];
+    let i = 0;
+    // Find first user msg after first AI rec
+    while (i < turns.length && turns[i].role === 'ai') i++;
+    for (; i < turns.length - 1; i++) {
+      apiTurns.push({ role: turns[i].role === 'user' ? 'user' : 'assistant', content: turns[i].content });
+    }
+    // Replace the simple apiMessages[0] with context + prior turns + new question
+    if (apiTurns.length) {
+      apiMessages[0].content = `Context:\n${chatContext[key]}\n\nPrior recommendation: ${chatHistory[key][0]?.content || ''}`;
+      apiMessages.push(...apiTurns);
+      apiMessages.push({ role: 'user', content: text });
+    }
+  }
+
+  const thinkingId = `thinking-reply-${key}-${Date.now()}`;
+  msgsEl.insertAdjacentHTML('beforeend', `
+    <div class="less-thinking" id="${thinkingId}">
+      <div class="less-thinking-dots"><span></span><span></span><span></span></div>
+    </div>`);
+  msgsEl.scrollTop = msgsEl.scrollHeight;
+
+  try {
+    const reply = await callLessAPI(apiMessages);
+    document.getElementById(thinkingId)?.remove();
+    addChatMsg(msgsEl, reply, 'ai');
+    chatHistory[key].push({ role: 'ai', content: reply });
+  } catch {
+    document.getElementById(thinkingId)?.remove();
+    addChatMsg(msgsEl, "Sorry, I'm having trouble right now. Try again in a moment.", 'ai');
+  }
+
+  sendBtn.disabled = false;
+  aiPending[key] = false;
+}
+
+function addChatMsg(container, text, role) {
+  const div = document.createElement('div');
+  div.className = `less-msg ${role}`;
+  div.textContent = text;
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
 }
 
 // ─────────────────────────────────────────────
@@ -1490,6 +1780,7 @@ function toggleDay(key) {
   const isToday = day.toDateString() === new Date().toDateString();
 
   slot.innerHTML = buildDayDetail(key, day, events, rec, wx, isToday);
+  initLessChat(key, slot);
   setTimeout(() => slot.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
 }
 
@@ -1608,9 +1899,11 @@ function renderTodayView() {
     </div>`).join('')}
   </div>` : '';
 
-  document.getElementById('today-content').innerHTML = `
+  const tcEl = document.getElementById('today-content');
+  tcEl.innerHTML = `
     <div class="less-card"><div class="less-label">Less</div><div class="less-text">${phrase}</div></div>
     ${wxHTML}${slotHTML}${evHTML}`;
+  initLessChat(key, tcEl);
 }
 
 // ─────────────────────────────────────────────
