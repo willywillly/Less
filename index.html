@@ -1203,8 +1203,7 @@ function buildAIContext(key) {
     prefs.movement  && `Movement type: ${prefs.movement}`,
   ].filter(Boolean).join('; ');
 
-  const dateObj = new Date(key);
-  dateObj.setHours(12, 0, 0, 0);
+  const dateObj = new Date(key + 'T12:00:00');
   const isToday = dateObj.toDateString() === new Date().toDateString();
   const dateLabel = isToday
     ? 'Today'
@@ -1772,8 +1771,7 @@ function toggleDay(key) {
   selectedDayKey = key;
   renderWeekGrid(getWeekDays().days);
 
-  const day     = new Date(key);
-  day.setHours(12, 0, 0, 0);
+  const day     = new Date(key + 'T12:00:00');
   const events  = weekEvents[key] || [];
   const rec     = weekRecs[key];
   const wx      = weekForecast[key];

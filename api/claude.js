@@ -14,6 +14,13 @@ export default async function handler(req, res) {
   }
 
   try {
+    const body = {
+      model: 'claude-opus-4-6',
+      max_tokens: 1000,
+      messages,
+    };
+    if (system) body.system = system;
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -21,18 +28,17 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01',
         'content-type': 'application/json',
       },
-      body: JSON.stringify({
-        model: 'claude-opus-4-6',
-        max_tokens: 1000,
-        system: system || '',
-        messages,
-      }),
+      body: JSON.stringify(body),
     });
 
     const data = await response.json();
-    if (!response.ok) return res.status(response.status).json(data);
+    if (!response.ok) {
+      console.error('Anthropic API error:', response.status, JSON.stringify(data));
+      return res.status(response.status).json(data);
+    }
     return res.status(200).json(data);
   } catch (error) {
-    return res.status(500).json({ error: 'Failed to call Claude API' });
+    console.error('claude.js fetch failed:', error);
+    return res.status(500).json({ error: error.message || 'Failed to call Claude API' });
   }
 }
