@@ -15,23 +15,29 @@ export default async function handler(req, res) {
 
   try {
     const body = {
-      model: 'claude-opus-4-6',
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 1000,
       messages,
     };
     if (system) body.system = system;
 
+    console.log('Request received:', JSON.stringify(body));
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
-        'x-api-key': apiKey,
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
         'anthropic-version': '2023-06-01',
-        'content-type': 'application/json',
       },
       body: JSON.stringify(body),
     });
 
+    console.log('API Response status:', response.status);
+
     const data = await response.json();
+    console.log('API Response:', JSON.stringify(data));
+
     if (!response.ok) {
       console.error('Anthropic API error:', response.status, JSON.stringify(data));
       return res.status(response.status).json(data);
